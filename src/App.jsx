@@ -21,6 +21,7 @@ import {
   UserPlus,
   Users,
   Wrench,
+  X,
 } from 'lucide-react'
 import {
   isCloudStorageEnabled,
@@ -243,8 +244,10 @@ const byId = (items) => Object.fromEntries(items.map((item) => [item.id, item]))
 function App() {
   const [inventory, setInventory] = useState(() => normalizeInventory(loadInventoryState(defaultInventory)))
   const [section, setSection] = useState('overview')
-  const [selectedAssetId, setSelectedAssetId] = useState(() => inventory.assets[0]?.id || '')
-  const [draft, setDraft] = useState(() => assetToDraft(inventory.assets[0] || createEmptyDraft(inventory.assets)))
+  const [selectedAssetId, setSelectedAssetId] = useState('')
+  const [draft, setDraft] = useState(() => createEmptyDraft(inventory.assets))
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [deletePrompt, setDeletePrompt] = useState(null)
   const [filters, setFilters] = useState({ search: '', category: 'Todos', status: 'Todos', ownerId: 'Todos', locationId: 'Todos' })
   const [movement, setMovement] = useState({
     assetId: inventory.assets[0]?.id || '',
@@ -262,7 +265,6 @@ function App() {
 
   const ownersById = useMemo(() => byId(inventory.owners), [inventory.owners])
   const locationsById = useMemo(() => byId(inventory.locations), [inventory.locations])
-  const selectedAsset = inventory.assets.find((asset) => asset.id === selectedAssetId)
   const movementAsset = inventory.assets.find((asset) => asset.id === movement.assetId)
 
   const stats = useMemo(() => {
@@ -314,7 +316,6 @@ function App() {
         if (sharedState?.assets) {
           const normalized = normalizeInventory(sharedState)
           setInventory(normalized)
-          setSelectedAssetId((current) => normalized.assets.some((asset) => asset.id === current) ? current : normalized.assets[0]?.id || '')
           setMovement((current) => ({
             ...current,
             assetId: normalized.assets.some((asset) => asset.id === current.assetId) ? current.assetId : normalized.assets[0]?.id || '',
@@ -348,15 +349,6 @@ function App() {
   }, [cloudLoaded, inventory])
 
   useEffect(() => {
-    if (!selectedAsset && inventory.assets[0]) setSelectedAssetId(inventory.assets[0].id)
-    if (!inventory.assets.length) setSelectedAssetId('')
-  }, [inventory.assets, selectedAsset])
-
-  useEffect(() => {
-    setDraft(selectedAsset ? assetToDraft(selectedAsset) : createEmptyDraft(inventory.assets))
-  }, [inventory.assets, selectedAsset])
-
-  useEffect(() => {
     if (!movementAsset && inventory.assets[0]) {
       setMovement((current) => ({
         ...current,
@@ -382,12 +374,27 @@ function App() {
   const startNewAsset = () => {
     setSelectedAssetId('')
     setDraft(createEmptyDraft(inventory.assets))
+    setEditorOpen(true)
     setSection('inventory')
   }
 
   const selectAsset = (assetId) => {
+    startEditAsset(assetId)
+  }
+
+  const startEditAsset = (assetId) => {
+    const asset = inventory.assets.find((item) => item.id === assetId)
+    if (!asset) return
     setSelectedAssetId(assetId)
+    setDraft(assetToDraft(asset))
+    setEditorOpen(true)
     setSection('inventory')
+  }
+
+  const closeEditor = () => {
+    setEditorOpen(false)
+    setSelectedAssetId('')
+    setDraft(createEmptyDraft(inventory.assets))
   }
 
   const saveAsset = () => {
@@ -426,13 +433,18 @@ function App() {
       const nextState = { ...current, assets: [newAsset, ...current.assets] }
       return pushActivity(nextState, newAsset, `${newAsset.code} creado en inventario.`)
     })
-    if (newAssetId) setSelectedAssetId(newAssetId)
+    closeEditor()
   }
 
-  const deleteAsset = () => {
-    if (!draft.id) return
-    const asset = inventory.assets.find((item) => item.id === draft.id)
-    if (!asset || !window.confirm(`Seguro que queres eliminar ${asset.code} - ${asset.name}?`)) return
+  const requestDeleteAsset = (assetId) => {
+    const asset = inventory.assets.find((item) => item.id === assetId)
+    if (!asset) return
+    setDeletePrompt(asset)
+  }
+
+  const confirmDeleteAsset = () => {
+    if (!deletePrompt) return
+    const asset = deletePrompt
     setInventory((current) => ({
       ...current,
       assets: current.assets.filter((item) => item.id !== asset.id),
@@ -441,6 +453,8 @@ function App() {
         ...(current.activity || []),
       ].slice(0, 80),
     }))
+    if (selectedAssetId === asset.id) closeEditor()
+    setDeletePrompt(null)
   }
 
   const applyMovement = () => {
@@ -578,14 +592,16 @@ function App() {
             filters={filters}
             locations={inventory.locations}
             owners={inventory.owners}
+            editorOpen={editorOpen}
             selectedAssetId={selectedAssetId}
             statuses={statuses}
-            onDelete={deleteAsset}
+            onCloseEditor={closeEditor}
+            onDelete={requestDeleteAsset}
             onDraftChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+            onEdit={startEditAsset}
             onFilterChange={(patch) => setFilters((current) => ({ ...current, ...patch }))}
             onNew={startNewAsset}
             onSave={saveAsset}
-            onSelect={selectAsset}
           />
         )}
 
@@ -628,6 +644,14 @@ function App() {
             onAddOwner={addOwner}
             onLocationChange={(patch) => setNewLocation((current) => ({ ...current, ...patch }))}
             onOwnerChange={(patch) => setNewOwner((current) => ({ ...current, ...patch }))}
+          />
+        )}
+
+        {deletePrompt && (
+          <ConfirmDialog
+            asset={deletePrompt}
+            onCancel={() => setDeletePrompt(null)}
+            onConfirm={confirmDeleteAsset}
           />
         )}
       </main>
@@ -687,17 +711,19 @@ function InventorySection({
   filters,
   locations,
   owners,
+  editorOpen,
   selectedAssetId,
   statuses,
+  onCloseEditor,
   onDelete,
   onDraftChange,
+  onEdit,
   onFilterChange,
   onNew,
   onSave,
-  onSelect,
 }) {
   return (
-    <div className="inventory-layout">
+    <div className={`inventory-layout ${editorOpen ? 'editor-open' : ''}`}>
       <section className="panel inventory-table-panel">
         <div className="panel-head">
           <Title eyebrow="Base completa" title="Activos" icon={<Boxes />} />
@@ -725,6 +751,7 @@ function InventorySection({
                 <th>Duenio</th>
                 <th>Ubicacion</th>
                 <th>Estado</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -732,7 +759,7 @@ function InventorySection({
                 const owner = owners.find((item) => item.id === asset.ownerId)?.name || 'Sin asignar'
                 const location = locations.find((item) => item.id === asset.locationId)?.name || 'Sin ubicacion'
                 return (
-                  <tr key={asset.id} className={selectedAssetId === asset.id ? 'selected' : ''} onClick={() => onSelect(asset.id)}>
+                  <tr key={asset.id} className={selectedAssetId === asset.id ? 'selected' : ''}>
                     <td><b>{asset.code}</b></td>
                     <td>
                       <strong>{asset.name}</strong>
@@ -742,6 +769,12 @@ function InventorySection({
                     <td>{owner}</td>
                     <td>{location}</td>
                     <td><StatusBadge status={asset.status} /></td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="ghost icon-only" onClick={() => onEdit(asset.id)} title="Editar activo"><Edit3 size={16} /></button>
+                        <button className="ghost icon-only" onClick={() => onDelete(asset.id)} title="Eliminar activo"><Trash2 size={16} /></button>
+                      </div>
+                    </td>
                   </tr>
                 )
               })}
@@ -751,10 +784,13 @@ function InventorySection({
         </div>
       </section>
 
-      <section className="panel editor-panel">
+      {editorOpen && <section className="panel editor-panel">
         <div className="panel-head">
           <Title eyebrow={draft.id ? 'Editar ficha' : 'Alta nueva'} title={draft.id ? draft.code : 'Nuevo activo'} icon={<Edit3 />} />
-          {draft.id && <button className="ghost icon-only danger" onClick={onDelete} title="Eliminar activo"><Trash2 size={17} /></button>}
+          <div className="row-actions">
+            {draft.id && <button className="ghost icon-only" onClick={() => onDelete(draft.id)} title="Eliminar activo"><Trash2 size={17} /></button>}
+            <button className="ghost icon-only" onClick={onCloseEditor} title="Cerrar editor"><X size={17} /></button>
+          </div>
         </div>
 
         <div className="form-grid">
@@ -777,10 +813,10 @@ function InventorySection({
         </div>
 
         <div className="editor-actions">
-          <button className="ghost" onClick={onNew}><Plus size={16} /> Limpiar</button>
+          <button className="ghost" onClick={onCloseEditor}><X size={16} /> Cerrar</button>
           <button className="primary" onClick={onSave} disabled={!draft.name.trim()}><Save size={16} /> Guardar activo</button>
         </div>
-      </section>
+      </section>}
     </div>
   )
 }
@@ -969,6 +1005,23 @@ function CloudPill({ enabled, status }) {
 function StatusBadge({ status }) {
   const icon = status === 'Mantenimiento' ? <Wrench size={13} /> : status === 'Archivado' ? <Archive size={13} /> : <CheckCircle2 size={13} />
   return <span className={`status-badge ${status.toLowerCase()}`}>{icon}{status}</span>
+}
+
+function ConfirmDialog({ asset, onCancel, onConfirm }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+      <section className="confirm-modal">
+        <div className="modal-icon"><Trash2 size={22} /></div>
+        <p className="eyebrow">Confirmar borrado</p>
+        <h2 id="delete-title">Eliminar activo</h2>
+        <p>Vas a borrar <strong>{asset.code} - {asset.name}</strong> del inventario compartido.</p>
+        <div className="modal-actions">
+          <button className="ghost" onClick={onCancel}>Cancelar</button>
+          <button className="primary" onClick={onConfirm}><Trash2 size={16} /> Borrar</button>
+        </div>
+      </section>
+    </div>
+  )
 }
 
 function Field({ label, children }) {

@@ -7,11 +7,11 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --accent: #f20b62;
-  --accent-soft: rgba(242, 11, 98, 0.12);
-  --green: #30d66b;
-  --amber: #f7b733;
-  --red: #ff4f5e;
+  --accent: #f5f5f5;
+  --accent-soft: rgba(255, 255, 255, 0.08);
+  --green: #d8d8d8;
+  --amber: #bdbdbd;
+  --red: #a8a8a8;
   --bg: #050505;
   --panel: rgba(17, 17, 17, 0.88);
   --panel-strong: #0b0b0b;
@@ -171,17 +171,17 @@ h2 {
 .nav-list button:hover,
 .nav-list button.active,
 .ghost:hover {
-  border-color: rgba(242, 11, 98, 0.5);
+  border-color: rgba(255, 255, 255, 0.34);
   background: var(--accent-soft);
   color: #fff;
 }
 
 .primary {
-  border-color: rgba(242, 11, 98, 0.76);
+  border-color: rgba(255, 255, 255, 0.86);
   background: var(--accent);
-  color: #fff;
+  color: #070707;
   font-style: italic;
-  box-shadow: 0 18px 40px rgba(242, 11, 98, 0.14);
+  box-shadow: 0 18px 40px rgba(255, 255, 255, 0.1);
 }
 
 .primary.full {
@@ -194,9 +194,9 @@ h2 {
 }
 
 .ghost.danger:hover {
-  border-color: rgba(255, 79, 94, 0.55);
-  background: rgba(255, 79, 94, 0.1);
-  color: var(--red);
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .side-total {
@@ -210,7 +210,7 @@ h2 {
 }
 
 .side-total strong {
-  color: var(--accent);
+  color: #fff;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 24px;
 }
@@ -233,12 +233,18 @@ main {
 }
 
 .toolbar,
-.editor-actions {
+.editor-actions,
+.row-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.row-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
 }
 
 .cloud-pill {
@@ -258,12 +264,12 @@ main {
 }
 
 .cloud-pill.online {
-  border-color: rgba(48, 214, 107, 0.38);
-  color: #d8ffe4;
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
 }
 
 .cloud-pill.online svg {
-  color: var(--green);
+  color: #fff;
 }
 
 .view-stack {
@@ -300,7 +306,7 @@ main {
   height: 38px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(242, 11, 98, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent);
@@ -354,9 +360,13 @@ main {
 
 .inventory-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+
+.inventory-layout.editor-open {
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
 }
 
 .editor-panel {
@@ -422,8 +432,8 @@ main {
 .field textarea:focus,
 .filters select:focus,
 .mini-form input:focus {
-  border-color: rgba(242, 11, 98, 0.65);
-  box-shadow: 0 0 0 3px rgba(242, 11, 98, 0.1);
+  border-color: rgba(255, 255, 255, 0.48);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
 
 .form-grid {
@@ -448,7 +458,7 @@ main {
 .asset-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 820px;
+  min-width: 920px;
 }
 
 .asset-table th,
@@ -467,17 +477,16 @@ main {
 }
 
 .asset-table tbody tr {
-  cursor: pointer;
   transition: background 150ms ease;
 }
 
 .asset-table tbody tr:hover,
 .asset-table tbody tr.selected {
-  background: rgba(242, 11, 98, 0.08);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .asset-table td b {
-  color: var(--accent);
+  color: #fff;
   font-family: "JetBrains Mono", ui-monospace, monospace;
 }
 
@@ -493,6 +502,11 @@ main {
 .asset-table td small {
   color: var(--muted);
   font-size: 11px;
+}
+
+.asset-table th:last-child,
+.asset-table td:last-child {
+  width: 112px;
 }
 
 .status-badge {
@@ -513,19 +527,19 @@ main {
 }
 
 .status-badge.oficina {
-  border-color: rgba(48, 214, 107, 0.32);
-  color: #d8ffe4;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #f5f5f5;
 }
 
 .status-badge.rodaje,
 .status-badge.prestado {
-  border-color: rgba(247, 183, 51, 0.34);
-  color: #ffe4ab;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #d8d8d8;
 }
 
 .status-badge.mantenimiento {
-  border-color: rgba(255, 79, 94, 0.36);
-  color: #ffd3d7;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #cfcfcf;
 }
 
 .status-bars {
@@ -551,7 +565,7 @@ main {
 }
 
 .status-row strong {
-  color: var(--accent);
+  color: #fff;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   text-align: right;
 }
@@ -567,7 +581,7 @@ main {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--accent);
+  background: #f5f5f5;
 }
 
 .asset-list.compact {
@@ -589,12 +603,12 @@ main {
 }
 
 .asset-list.compact button:hover {
-  border-color: rgba(242, 11, 98, 0.44);
+  border-color: rgba(255, 255, 255, 0.34);
   background: var(--accent-soft);
 }
 
 .asset-list.compact strong {
-  color: var(--accent);
+  color: #fff;
   font-family: "JetBrains Mono", ui-monospace, monospace;
 }
 
@@ -690,7 +704,7 @@ main {
   margin-top: 4px;
   border-radius: 999px;
   background: var(--accent);
-  box-shadow: 0 0 18px rgba(242, 11, 98, 0.55);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.28);
 }
 
 .mini-form {
@@ -763,6 +777,55 @@ main {
 .empty-state p {
   max-width: 420px;
   color: var(--muted);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.76);
+  backdrop-filter: blur(10px);
+}
+
+.confirm-modal {
+  width: min(430px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: #111;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.72);
+}
+
+.modal-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.confirm-modal p:not(.eyebrow) {
+  color: #cfcfcf;
+  line-height: 1.55;
+}
+
+.confirm-modal p strong {
+  color: #fff;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 @media (max-width: 1180px) {
