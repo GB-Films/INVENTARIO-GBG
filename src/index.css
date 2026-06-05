@@ -53,6 +53,14 @@ button:disabled {
   opacity: 0.45;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}
+
 h1,
 h2,
 h3,
@@ -458,7 +466,7 @@ main {
 .asset-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 920px;
+  min-width: 860px;
 }
 
 .asset-table th,
