@@ -11,7 +11,12 @@ npm run dev
 
 ## Nube
 
-Usa el mismo Supabase compartido de BANI-PRESU / Entregas mediante la tabla `app_state` y la key `gbg-inventory-state`.
+Usa la nube de BANI VAULT en Firebase / Firestore. La app guarda un unico documento compartido del inventario, asi cualquier persona que abra el link ve la ultima version actualizada.
+
+Usuarios:
+
+- `admin` / `admin`: acceso completo.
+- `crew` / `crew`: consulta y registro de movimientos.
 
 ## Deploy
 

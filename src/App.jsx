@@ -11,6 +11,8 @@ import {
   Filter,
   History,
   Home,
+  LogIn,
+  LogOut,
   MapPin,
   PackagePlus,
   Plus,
@@ -240,8 +242,30 @@ const formatDate = (value) => {
 }
 
 const byId = (items) => Object.fromEntries(items.map((item) => [item.id, item]))
+const SESSION_KEY = 'gbg-inventory-session'
+const APP_USERS = {
+  admin: { password: 'admin', role: 'admin', label: 'Administrador' },
+  crew: { password: 'crew', role: 'crew', label: 'Crew' },
+}
+const USER_ALIASES = {
+  banivfx: { userKey: 'admin', password: 'banivfx' },
+}
+
+const loadSession = () => {
+  try {
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY))
+    return session?.role && session?.username ? session : null
+  } catch {
+    return null
+  }
+}
+
+const saveSession = (session) => localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+const clearSession = () => localStorage.removeItem(SESSION_KEY)
 
 function App() {
+  const [session, setSession] = useState(() => loadSession())
+  const [loginError, setLoginError] = useState('')
   const [inventory, setInventory] = useState(() => normalizeInventory(loadInventoryState(defaultInventory)))
   const [section, setSection] = useState('overview')
   const [selectedAssetId, setSelectedAssetId] = useState('')
@@ -262,6 +286,7 @@ function App() {
   const [cloudStatus, setCloudStatus] = useState(isCloudStorageEnabled() ? 'Conectando nube...' : 'Modo local')
   const saveTimer = useRef(null)
   const initialInventory = useRef(inventory)
+  const isAdmin = session?.role === 'admin'
 
   const ownersById = useMemo(() => byId(inventory.owners), [inventory.owners])
   const locationsById = useMemo(() => byId(inventory.locations), [inventory.locations])
@@ -307,7 +332,10 @@ function App() {
   }, [inventory])
 
   useEffect(() => {
+    if (!session) return undefined
     if (!isCloudStorageEnabled()) return undefined
+    setCloudLoaded(false)
+    setCloudStatus('Conectando nube...')
     let cancelled = false
     const hydrateCloud = async () => {
       try {
@@ -325,6 +353,7 @@ function App() {
         }
         setCloudStatus('Nube sincronizada')
       } catch (error) {
+        console.error('Cloud load failed', error)
         if (!cancelled) setCloudStatus(cloudErrorStatus(error, 'Sin conexion a nube'))
       } finally {
         if (!cancelled) setCloudLoaded(true)
@@ -334,19 +363,23 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [session])
 
   useEffect(() => {
+    if (!session) return undefined
     if (!cloudLoaded || !isCloudStorageEnabled()) return undefined
     setCloudStatus('Guardando en nube...')
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       saveSharedInventoryState(inventory)
         .then(() => setCloudStatus('Nube sincronizada'))
-        .catch((error) => setCloudStatus(cloudErrorStatus(error, 'No se pudo guardar en nube')))
+        .catch((error) => {
+          console.error('Cloud save failed', error)
+          setCloudStatus(cloudErrorStatus(error, 'No se pudo guardar en nube'))
+        })
     }, 450)
     return () => clearTimeout(saveTimer.current)
-  }, [cloudLoaded, inventory])
+  }, [cloudLoaded, inventory, session])
 
   useEffect(() => {
     if (!movementAsset && inventory.assets[0]) {
@@ -371,7 +404,39 @@ function App() {
     ].slice(0, 80),
   })
 
+  const handleLogin = (username, password) => {
+    const typedUser = username.trim().toLowerCase()
+    const alias = USER_ALIASES[typedUser]
+    const userKey = alias?.userKey || typedUser
+    const credentials = APP_USERS[userKey]
+    const expectedPassword = alias?.password || credentials?.password
+
+    if (!credentials || password.trim().toLowerCase() !== expectedPassword) {
+      setLoginError('Usuario o contrasena incorrectos.')
+      return
+    }
+
+    const nextSession = {
+      username: userKey,
+      role: credentials.role,
+      label: credentials.label,
+      loggedAt: nowIso(),
+    }
+    saveSession(nextSession)
+    setLoginError('')
+    setSession(nextSession)
+  }
+
+  const handleLogout = () => {
+    clearSession()
+    setSession(null)
+    setSection('overview')
+    setDeletePrompt(null)
+    closeEditor()
+  }
+
   const startNewAsset = () => {
+    if (!isAdmin) return
     setSelectedAssetId('')
     setDraft(createEmptyDraft(inventory.assets))
     setEditorOpen(true)
@@ -379,10 +444,13 @@ function App() {
   }
 
   const selectAsset = (assetId) => {
-    startEditAsset(assetId)
+    setSelectedAssetId(assetId)
+    setSection('inventory')
+    if (isAdmin) startEditAsset(assetId)
   }
 
   const startEditAsset = (assetId) => {
+    if (!isAdmin) return
     const asset = inventory.assets.find((item) => item.id === assetId)
     if (!asset) return
     setSelectedAssetId(assetId)
@@ -398,6 +466,7 @@ function App() {
   }
 
   const saveAsset = () => {
+    if (!isAdmin) return
     if (!draft.name.trim()) return
     const data = draftToAsset(draft)
     const newAssetId = draft.id ? '' : makeId()
@@ -437,6 +506,7 @@ function App() {
   }
 
   const requestDeleteAsset = (assetId) => {
+    if (!isAdmin) return
     const asset = inventory.assets.find((item) => item.id === assetId)
     if (!asset) return
     setDeletePrompt(asset)
@@ -485,6 +555,7 @@ function App() {
   }
 
   const addOwner = () => {
+    if (!isAdmin) return
     if (!newOwner.name.trim()) return
     const owner = { id: makeId(), ...newOwner, name: newOwner.name.trim(), contact: newOwner.contact.trim() }
     setInventory((current) => ({ ...current, owners: [...current.owners, owner] }))
@@ -492,6 +563,7 @@ function App() {
   }
 
   const addLocation = () => {
+    if (!isAdmin) return
     if (!newLocation.name.trim()) return
     const location = { id: makeId(), name: newLocation.name.trim(), detail: newLocation.detail.trim() }
     setInventory((current) => ({ ...current, locations: [...current.locations, location] }))
@@ -527,6 +599,10 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
+  if (!session) {
+    return <LoginScreen error={loginError} onLogin={handleLogin} />
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -545,10 +621,22 @@ function App() {
           <NavButton active={section === 'owners'} icon={<Users />} label="Duenos y lugares" onClick={() => setSection('owners')} />
         </nav>
 
-        <button className="primary full" onClick={startNewAsset}>
-          <PackagePlus size={17} />
-          Nuevo activo
-        </button>
+        {isAdmin && (
+          <button className="primary full" onClick={startNewAsset}>
+            <PackagePlus size={17} />
+            Nuevo activo
+          </button>
+        )}
+
+        <div className="session-card">
+          <span>Usuario</span>
+          <strong>{session.label}</strong>
+          <small>{isAdmin ? 'Acceso completo' : 'Vista + movimientos'}</small>
+          <button className="ghost full" onClick={handleLogout}>
+            <LogOut size={15} />
+            Salir
+          </button>
+        </div>
 
         <div className="side-total">
           <span>Valor cargado</span>
@@ -565,6 +653,7 @@ function App() {
           </div>
           <div className="toolbar">
             <CloudPill enabled={isCloudStorageEnabled()} status={cloudStatus} />
+            <div className="role-pill">{session.label}</div>
             <button className="ghost" onClick={exportCsv} title="Exportar CSV">
               <Download size={16} />
               CSV
@@ -595,6 +684,7 @@ function App() {
             editorOpen={editorOpen}
             selectedAssetId={selectedAssetId}
             statuses={statuses}
+            isAdmin={isAdmin}
             onCloseEditor={closeEditor}
             onDelete={requestDeleteAsset}
             onDraftChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
@@ -642,6 +732,7 @@ function App() {
             owners={inventory.owners}
             onAddLocation={addLocation}
             onAddOwner={addOwner}
+            isAdmin={isAdmin}
             onLocationChange={(patch) => setNewLocation((current) => ({ ...current, ...patch }))}
             onOwnerChange={(patch) => setNewOwner((current) => ({ ...current, ...patch }))}
           />
@@ -712,6 +803,7 @@ function InventorySection({
   locations,
   owners,
   editorOpen,
+  isAdmin,
   selectedAssetId,
   statuses,
   onCloseEditor,
@@ -727,7 +819,7 @@ function InventorySection({
       <section className="panel inventory-table-panel">
         <div className="panel-head">
           <Title eyebrow="Base completa" title="Activos" icon={<Boxes />} />
-          <button className="ghost icon-only" onClick={onNew} title="Nuevo activo"><Plus size={18} /></button>
+          {isAdmin && <button className="ghost icon-only" onClick={onNew} title="Nuevo activo"><Plus size={18} /></button>}
         </div>
 
         <div className="filters">
@@ -751,7 +843,7 @@ function InventorySection({
                 <th>Duenio</th>
                 <th>Ubicacion</th>
                 <th>Estado</th>
-                <th>Acciones</th>
+                {isAdmin && <th>Acciones</th>}
               </tr>
             </thead>
             <tbody>
@@ -769,12 +861,14 @@ function InventorySection({
                     <td>{owner}</td>
                     <td>{location}</td>
                     <td><StatusBadge status={asset.status} /></td>
-                    <td>
-                      <div className="row-actions">
-                        <button className="ghost icon-only" onClick={() => onEdit(asset.id)} title="Editar activo"><Edit3 size={16} /></button>
-                        <button className="ghost icon-only" onClick={() => onDelete(asset.id)} title="Eliminar activo"><Trash2 size={16} /></button>
-                      </div>
-                    </td>
+                    {isAdmin && (
+                      <td>
+                        <div className="row-actions">
+                          <button className="ghost icon-only" onClick={() => onEdit(asset.id)} title="Editar activo"><Edit3 size={16} /></button>
+                          <button className="ghost icon-only" onClick={() => onDelete(asset.id)} title="Eliminar activo"><Trash2 size={16} /></button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -784,7 +878,7 @@ function InventorySection({
         </div>
       </section>
 
-      {editorOpen && <section className="panel editor-panel">
+      {editorOpen && isAdmin && <section className="panel editor-panel">
         <div className="panel-head">
           <Title eyebrow={draft.id ? 'Editar ficha' : 'Alta nueva'} title={draft.id ? draft.code : 'Nuevo activo'} icon={<Edit3 />} />
           <div className="row-actions">
@@ -878,17 +972,21 @@ function MovementSection({ assets, locations, movement, owners, selectedAsset, s
   )
 }
 
-function OwnersSection({ assets, locations, newLocation, newOwner, owners, onAddLocation, onAddOwner, onLocationChange, onOwnerChange }) {
+function OwnersSection({ assets, isAdmin, locations, newLocation, newOwner, owners, onAddLocation, onAddOwner, onLocationChange, onOwnerChange }) {
   return (
     <div className="owners-layout">
       <section className="panel">
         <Title eyebrow="Propiedad y custodia" title="Duenos / responsables" icon={<Users />} />
-        <div className="mini-form">
-          <Input label="Nombre" value={newOwner.name} onChange={(value) => onOwnerChange({ name: value })} />
-          <Input label="Tipo" value={newOwner.type} onChange={(value) => onOwnerChange({ type: value })} />
-          <Input label="Contacto / nota" value={newOwner.contact} onChange={(value) => onOwnerChange({ contact: value })} />
-          <button className="primary" onClick={onAddOwner}><UserPlus size={16} /> Agregar</button>
-        </div>
+        {isAdmin ? (
+          <div className="mini-form">
+            <Input label="Nombre" value={newOwner.name} onChange={(value) => onOwnerChange({ name: value })} />
+            <Input label="Tipo" value={newOwner.type} onChange={(value) => onOwnerChange({ type: value })} />
+            <Input label="Contacto / nota" value={newOwner.contact} onChange={(value) => onOwnerChange({ contact: value })} />
+            <button className="primary" onClick={onAddOwner}><UserPlus size={16} /> Agregar</button>
+          </div>
+        ) : (
+          <EmptyState title="Solo lectura" body="El usuario crew puede consultar responsables y ubicaciones." />
+        )}
         <div className="directory-list">
           {owners.map((owner) => {
             const owned = assets.filter((asset) => asset.ownerId === owner.id).length
@@ -909,11 +1007,15 @@ function OwnersSection({ assets, locations, newLocation, newOwner, owners, onAdd
 
       <section className="panel">
         <Title eyebrow="Ubicaciones" title="Lugares posibles" icon={<MapPin />} />
-        <div className="mini-form">
-          <Input label="Lugar" value={newLocation.name} onChange={(value) => onLocationChange({ name: value })} />
-          <Input label="Detalle" value={newLocation.detail} onChange={(value) => onLocationChange({ detail: value })} />
-          <button className="primary" onClick={onAddLocation}><Plus size={16} /> Agregar</button>
-        </div>
+        {isAdmin ? (
+          <div className="mini-form">
+            <Input label="Lugar" value={newLocation.name} onChange={(value) => onLocationChange({ name: value })} />
+            <Input label="Detalle" value={newLocation.detail} onChange={(value) => onLocationChange({ detail: value })} />
+            <button className="primary" onClick={onAddLocation}><Plus size={16} /> Agregar</button>
+          </div>
+        ) : (
+          <EmptyState title="Solo lectura" body="El usuario crew no puede crear ubicaciones nuevas." />
+        )}
         <div className="directory-list">
           {locations.map((location) => {
             const count = assets.filter((asset) => asset.locationId === location.id).length
@@ -990,6 +1092,48 @@ function NavButton({ active, icon, label, onClick }) {
       {icon}
       {label}
     </button>
+  )
+}
+
+function LoginScreen({ error, onLogin }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const canSubmit = username.trim() && password.trim()
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    onLogin(username, password)
+  }
+
+  return (
+    <main className="login-shell">
+      <section className="login-panel">
+        <div className="brand-lockup login-brand">
+          <img src={`${import.meta.env.BASE_URL}gb-films-logo.png`} alt="GB Films" />
+          <div>
+            <strong>GBG</strong>
+            <span>Inventario vivo</span>
+          </div>
+        </div>
+        <div>
+          <p className="eyebrow">Acceso cloud</p>
+          <h1>Inventario de activos</h1>
+        </div>
+        <form className="login-form" onSubmit={handleSubmit}>
+          <Input label="Usuario" value={username} onChange={setUsername} placeholder="admin o crew" />
+          <Input label="Contrasena" type="password" value={password} onChange={setPassword} placeholder="********" />
+          {error && <p className="login-error">{error}</p>}
+          <button className="primary full" disabled={!canSubmit} type="submit">
+            <LogIn size={16} />
+            Entrar
+          </button>
+        </form>
+        <div className="login-cloud-note">
+          <Cloud size={14} />
+          <span>Nube BANI VAULT / Gran Berta Films</span>
+        </div>
+      </section>
+    </main>
   )
 }
 
